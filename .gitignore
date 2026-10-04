@@ -17,10 +17,12 @@ env/
 .DS_Store
 Thumbs.db
 
-# Local model files
+# Generated model files
 *.pkl
 *.joblib
 
-# Local/private data
-data/raw/*
+# Generated database
+*.db
+
+# Processed/generated data
 data/processed/*
