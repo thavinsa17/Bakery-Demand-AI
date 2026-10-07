@@ -25,29 +25,36 @@ entry_date = st.date_input(
 
 
 # -----------------------------
-# Product Data
+# Product & Prediction Data
 # -----------------------------
-# Temporary product catalogue.
-# This will later come from the backend/database.
+# Temporary product catalogue and predictions.
+# These will later come from the backend/database.
+#
+# Predicted Demand is intentionally NOT editable.
+# It represents the prediction made for this date.
 
 products = [
     {
         "Product": "Croissant",
+        "Predicted Demand": 45,
         "Units Produced": 0,
         "Units Sold": 0
     },
     {
         "Product": "Chocolate Cake",
+        "Predicted Demand": 18,
         "Units Produced": 0,
         "Units Sold": 0
     },
     {
         "Product": "Chicken Puff",
+        "Predicted Demand": 32,
         "Units Produced": 0,
         "Units Sold": 0
     },
     {
         "Product": "Fish Bun",
+        "Predicted Demand": 27,
         "Units Produced": 0,
         "Units Sold": 0
     },
@@ -68,6 +75,11 @@ edited_data = st.data_editor(
         "Product": st.column_config.TextColumn(
             "Product",
             disabled=True
+        ),
+        "Predicted Demand": st.column_config.NumberColumn(
+            "Predicted Demand",
+            disabled=True,
+            format="%d"
         ),
         "Units Produced": st.column_config.NumberColumn(
             "Units Produced",
@@ -111,8 +123,12 @@ weather_condition = st.selectbox(
 invalid_entries = []
 
 for item in edited_data:
+
     if item["Units Sold"] > item["Units Produced"]:
-        invalid_entries.append(item["Product"])
+
+        invalid_entries.append(
+            item["Product"]
+        )
 
 
 # -----------------------------
@@ -152,6 +168,7 @@ if st.button("Save Daily Entries", type="primary"):
             summary_data.append(
                 {
                     "Product": item["Product"],
+                    "Predicted Demand": item["Predicted Demand"],
                     "Units Produced": item["Units Produced"],
                     "Units Sold": item["Units Sold"],
                     "Leftover": leftover

@@ -11,19 +11,23 @@ page_header(
 )
 
 
+# -----------------------------
+# Current Model
+# -----------------------------
+
 st.subheader("Current Model")
 
-st.write("Model status: **Ready**")
-st.write("Model type: **Demand Forecasting Model**")
+st.write("**Last trained:** 04/10/2026")
+st.write("**Training records:** 7,450")
+st.write("**Model:** XGBoost")
 
 
-st.subheader("Model Training")
+# -----------------------------
+# Retrain Model
+# -----------------------------
 
-st.write(
-    "Retraining the model will use the latest available bakery data."
-)
+if st.button("Retrain Model", type="primary"):
 
-if st.button("Retrain Model"):
     st.info(
-        "Model training will be connected to the backend later."
+        "Model retraining will be connected to the training pipeline later."
     )
