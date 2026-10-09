@@ -24,6 +24,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from xgboost import XGBRegressor
 
+# Import the function used to refresh the prediction model.
+from ml.predict import reload_model
 
 # ============================================================
 # PATH CONFIGURATION
@@ -400,13 +402,21 @@ def train_model():
 
     print("")
 
+    
     if replace_model:
+        # Save the better candidate model to demand_model.pkl.
         save_model(candidate_model)
+
+        # Reload the saved model for future predictions.
+        reload_model()
+
         print("Candidate model is better.")
         print("The saved model has been replaced.")
     else:
+        # Keep the existing model if the candidate is not better.
         print("Candidate model is not better.")
         print("The current model has been kept.")
+
 
     print("")
     print("==============================")

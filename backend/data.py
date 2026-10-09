@@ -26,16 +26,10 @@ import pandas as pd
 # PATH CONFIGURATION
 # ============================================================
 
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))
-)
-
-LIVE_DATA_PATH = os.path.join(
-    PROJECT_ROOT,
-    "data",
-    "bakery_data.csv"
-)
-
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LIVE_DATA_PATH = os.path.join(PROJECT_ROOT,"data","bakery_data.csv")
+FORECAST_DATA_PATH = os.path.join(PROJECT_ROOT,"data","forecast_history.csv")
+PRICE_HISTORY_PATH = os.path.join(PROJECT_ROOT, "data", "price_history.csv")
 
 # ============================================================
 # REQUIRED COLUMNS
@@ -100,6 +94,78 @@ def load_bakery_data():
     return data
 
 
+
+# ============================================================
+# INITIALIZE PRICE HISTORY
+# ============================================================
+
+def initialize_price_history():
+    """
+    Create price_history.csv if it does not already exist.
+
+    The initial price for each product is taken from its latest
+    recorded entry in bakery_data.csv.
+
+    An existing price history file is never overwritten.
+    The original bakery sales dataset is never modified.
+    """
+
+    # If the price history already exists, preserve it.
+    if os.path.exists(PRICE_HISTORY_PATH):
+        return
+
+    # Load the existing live bakery dataset.
+    data = load_bakery_data()
+
+    # Do not create an empty price history from an empty dataset.
+    if data.empty:
+        raise ValueError(
+            "Cannot initialize price history from empty bakery data."
+        )
+
+    # Ignore rows that do not contain a product or a valid price.
+    data = data.dropna(
+        subset=["Product", "Base_Price_LKR"]
+    ).copy()
+
+    # Ensure dates are in a consistent datetime format.
+    data["Date"] = pd.to_datetime(
+        data["Date"],
+        errors="raise"
+    )
+
+    # Sort by date so the latest record for each product is last.
+    data = data.sort_values("Date")
+
+    # Keep the latest recorded price for each individual product.
+    latest_prices = data.drop_duplicates(
+        subset=["Product"],
+        keep="last"
+    )
+
+    # Keep only the fields needed for price history.
+    price_history = latest_prices[
+        ["Date", "Product", "Base_Price_LKR"]
+    ].copy()
+
+    # Rename Date to Effective_Date to show when the price applies.
+    price_history = price_history.rename(
+        columns={"Date": "Effective_Date"}
+    )
+
+    # Ensure the destination folder exists before writing the file.
+    os.makedirs(
+        os.path.dirname(PRICE_HISTORY_PATH),
+        exist_ok=True
+    )
+
+    # Create the initial price history CSV.
+    price_history.to_csv(
+        PRICE_HISTORY_PATH,
+        index=False
+    )
+
+
 # ============================================================
 # SAVE LIVE DATA
 # ============================================================
@@ -151,34 +217,62 @@ def get_products():
     return sorted(products)
 
 
+
 # ============================================================
 # GET PRODUCT PRICES
 # ============================================================
 
 def get_product_prices():
     """
-    Return the current base price for each product.
+    Return the latest known price for every bakery product.
+
+    Initializes price_history.csv from bakery_data.csv if
+    the price history file does not exist yet.
 
     Returns
     -------
     dict
-        Dictionary in the form:
-        {
-            "Chicken Bun": 100,
-            "Fish Bun": 120
-        }
+        A dictionary mapping each product to its latest price.
     """
 
-    data = load_bakery_data()
+    # Create the price history file if it has not been initialized.
+    initialize_price_history()
 
-    prices = (
-        data[["Product", "Base_Price_LKR"]]
-        .drop_duplicates("Product")
+    # Load the separate price history CSV.
+    data = pd.read_csv(PRICE_HISTORY_PATH)
+
+    # Return an empty dictionary if there are no price records.
+    if data.empty:
+        return {}
+
+    # Convert effective dates to datetime values.
+    data["Effective_Date"] = pd.to_datetime(
+        data["Effective_Date"],
+        errors="raise"
+    )
+
+    # Sort by date so the most recent price for each product
+    # appears last.
+    data = data.sort_values("Effective_Date")
+
+    # Keep the latest price record for each product.
+    latest_prices = data.drop_duplicates(
+        subset=["Product"],
+        keep="last"
+    )
+
+    # Convert product names and prices into a dictionary.
+    return (
+        latest_prices
         .set_index("Product")["Base_Price_LKR"]
         .to_dict()
     )
 
-    return prices
+
+
+# ============================================================
+# GET PRODUCT PRICE
+# ============================================================
 
 
 # ============================================================
@@ -187,42 +281,182 @@ def get_product_prices():
 
 def get_product_price(product, target_date=None):
     """
-    Get the base price of one product.
+    Get a product's price for a particular date.
 
-    If target_date is supplied, the price from the latest
-    record on or before that date is returned.
+    If target_date is provided, return the latest price whose
+    Effective_Date is on or before that date.
 
-    This allows future price changes to preserve historical
-    prices.
+    If target_date is omitted, return the latest known price.
     """
 
-    data = load_bakery_data()
+    # Ensure that price history exists before reading it.
+    initialize_price_history()
 
+    # Load the separate price history file.
+    data = pd.read_csv(PRICE_HISTORY_PATH)
+
+    # Keep only records belonging to the requested product.
     product_data = data[
         data["Product"] == product
     ].copy()
 
+    # Reject products that have no recorded price history.
     if product_data.empty:
         raise ValueError(
-            f"Unknown bakery product: {product}"
+            f"No price history found for product: {product}"
         )
 
+    # Convert effective dates into datetime values.
+    product_data["Effective_Date"] = pd.to_datetime(
+        product_data["Effective_Date"],
+        errors="raise"
+    )
+
+    # If a date was provided, exclude prices that start later.
     if target_date is not None:
-        target_date = pd.to_datetime(target_date)
+        target_date = pd.to_datetime(
+            target_date,
+            errors="raise"
+        ).normalize()
 
         product_data = product_data[
-            product_data["Date"] <= target_date
+            product_data["Effective_Date"] <= target_date
         ]
 
+        # Reject dates earlier than the first known price.
         if product_data.empty:
             raise ValueError(
                 f"No price information found for {product} "
                 f"on or before {target_date.date()}."
             )
 
-    product_data = product_data.sort_values("Date")
+    # Sort chronologically and select the latest applicable price.
+    product_data = product_data.sort_values("Effective_Date")
 
     return product_data.iloc[-1]["Base_Price_LKR"]
+
+
+
+# ============================================================
+# UPDATE PRODUCT PRICE
+# ============================================================
+
+def update_product_price(product, new_price, effective_date=None):
+    """
+    Record a new price for a product without overwriting
+    previous price history or modifying sales records.
+
+    The new price applies from effective_date onward.
+    If effective_date is omitted, today's date is used.
+
+    Returns
+    -------
+    bool
+        True if a new price record was added.
+        False if the price is already the same on that date.
+    """
+
+    from datetime import date
+
+    # Ensure the initial price history exists.
+    initialize_price_history()
+
+    # Confirm that the requested product is in the catalogue.
+    if product not in get_products():
+        raise ValueError(f"Unknown bakery product: {product}")
+
+    # Convert the new price to a number.
+    try:
+        new_price = float(new_price)
+    except (TypeError, ValueError):
+        raise ValueError("Price must be a valid number.")
+
+    # Reject zero, negative, NaN, or infinite prices.
+    import math
+
+    if not math.isfinite(new_price) or new_price <= 0:
+        raise ValueError("Price must be a positive finite number.")
+
+    # Use today's date if no effective date was supplied.
+    if effective_date is None:
+        effective_date = date.today()
+
+    # Normalize the date to remove any time component.
+    effective_date = pd.to_datetime(
+        effective_date,
+        errors="raise"
+    ).normalize()
+
+    # Load existing price history.
+    data = pd.read_csv(PRICE_HISTORY_PATH)
+
+    # Convert stored dates for reliable comparisons.
+    data["Effective_Date"] = pd.to_datetime(
+        data["Effective_Date"],
+        errors="raise"
+    ).dt.normalize()
+
+    # Find the latest price that applies on the change date.
+    applicable_prices = data[
+        (data["Product"] == product)
+        & (data["Effective_Date"] <= effective_date)
+    ]
+
+    # A price cannot be changed before the product's first
+    # recorded price without a known starting price.
+    if applicable_prices.empty:
+        raise ValueError(
+            f"No existing price history for {product} "
+            f"on or before {effective_date.date()}."
+        )
+
+    current_price = applicable_prices.sort_values(
+        "Effective_Date"
+    ).iloc[-1]["Base_Price_LKR"]
+
+    # Avoid recording a duplicate price change when the price
+    # is already the same on the effective date.
+    if float(current_price) == new_price:
+        return False
+
+    # Reject conflicting price records for the same product/date.
+    same_date = data[
+        (data["Product"] == product)
+        & (data["Effective_Date"] == effective_date)
+    ]
+
+    if not same_date.empty:
+        # Replace only the record for this product and date.
+        # Other dates and products remain unchanged.
+        data = data[
+            ~(
+                (data["Product"] == product)
+                & (data["Effective_Date"] == effective_date)
+            )
+        ]
+
+    # Build a new price-history record.
+    new_record = pd.DataFrame([{
+        "Effective_Date": effective_date,
+        "Product": product,
+        "Base_Price_LKR": new_price,
+    }])
+
+    # Add the new record while preserving earlier history.
+    data = pd.concat(
+        [data, new_record],
+        ignore_index=True
+    )
+
+    # Sort records for readability and reliable future lookups.
+    data = data.sort_values(
+        ["Effective_Date", "Product"]
+    ).reset_index(drop=True)
+
+    # Save only the price history file.
+    data.to_csv(PRICE_HISTORY_PATH, index=False)
+
+    return True
 
 
 # ============================================================
@@ -473,3 +707,166 @@ def get_season(month):
         return "Southwest Monsoon"
 
     return "Second Inter-monsoon"
+
+
+# ============================================================
+# SAVE FORECASTS
+# ============================================================
+
+def save_forecasts(forecasts):
+    """
+    Save forecasts to forecast_history.csv.
+
+    Creates the CSV if it does not exist and replaces
+    existing records with matching Date + Product keys.
+    """
+
+    columns = ["Date", "Product", "Predicted_Demand"]
+
+    if not forecasts:
+        raise ValueError("Cannot save an empty forecast batch.")
+
+    forecast_data = pd.DataFrame(forecasts)
+
+    missing_columns = [
+        column for column in columns
+        if column not in forecast_data.columns
+    ]
+
+    if missing_columns:
+        raise ValueError(
+            f"Forecasts are missing columns: {missing_columns}"
+        )
+
+    forecast_data = forecast_data[columns].copy()
+    forecast_data["Date"] = pd.to_datetime(
+        forecast_data["Date"], errors="raise"
+    ).dt.normalize()
+
+    if forecast_data["Product"].isna().any():
+        raise ValueError("Forecast product names cannot be empty.")
+
+    if forecast_data["Date"].isna().any():
+        raise ValueError("Forecast dates cannot be empty.")
+
+    if forecast_data["Predicted_Demand"].isna().any():
+        raise ValueError("Predicted demand cannot be empty.")
+
+    if (forecast_data["Predicted_Demand"] < 0).any():
+        raise ValueError("Predicted demand cannot be negative.")
+
+    forecast_data["Product"] = forecast_data["Product"].astype(str)
+
+    if forecast_data["Product"].str.strip().eq("").any():
+        raise ValueError("Forecast product names cannot be empty.")
+
+    if forecast_data.duplicated(["Date", "Product"]).any():
+        raise ValueError(
+            "A forecast batch contains duplicate Date + Product records."
+        )
+
+    valid_products = get_products()
+
+    if not forecast_data["Product"].isin(valid_products).all():
+        raise ValueError("Forecast batch contains an unknown product.")
+
+    if not os.path.exists(FORECAST_DATA_PATH):
+        os.makedirs(os.path.dirname(FORECAST_DATA_PATH), exist_ok=True)
+        forecast_data.to_csv(FORECAST_DATA_PATH, index=False)
+        return
+
+    existing_data = pd.read_csv(FORECAST_DATA_PATH)
+
+    if existing_data.empty:
+        existing_data = pd.DataFrame(columns=columns)
+    elif not set(columns).issubset(existing_data.columns):
+        raise ValueError("Forecast history CSV has an invalid structure.")
+
+    if not existing_data.empty:
+        existing_data["Date"] = pd.to_datetime(
+            existing_data["Date"], errors="raise"
+        ).dt.normalize()
+
+    forecast_keys = pd.MultiIndex.from_frame(
+        forecast_data[["Date", "Product"]]
+    )
+
+    if not existing_data.empty:
+        existing_keys = pd.MultiIndex.from_frame(
+            existing_data[["Date", "Product"]]
+        )
+
+        existing_data = existing_data[
+            ~existing_keys.isin(forecast_keys)
+        ]
+
+    updated_data = pd.concat(
+        [existing_data[columns], forecast_data],
+        ignore_index=True
+    )
+
+    updated_data = updated_data.sort_values(
+        ["Date", "Product"]
+    ).reset_index(drop=True)
+
+    updated_data.to_csv(FORECAST_DATA_PATH, index=False)
+
+
+
+# ============================================================
+# GET FORECASTS FOR A DATE
+# ============================================================
+
+def get_forecast_data(target_date):
+    """
+    Return a prediction for every product on the requested date.
+
+    Products without saved predictions receive "-" for display.
+    """
+
+    products = get_products()
+
+    result = pd.DataFrame({
+        "Product": products,
+        "Predicted_Demand": ["-"] * len(products)
+    })
+
+    if not os.path.exists(FORECAST_DATA_PATH):
+        return result
+
+    target_date = pd.to_datetime(target_date, errors="raise").normalize()
+
+    data = pd.read_csv(FORECAST_DATA_PATH)
+
+    if data.empty:
+        return result
+
+    required_columns = [
+        "Date",
+        "Product",
+        "Predicted_Demand"
+    ]
+
+    if not set(required_columns).issubset(data.columns):
+        raise ValueError("Forecast history CSV has an invalid structure.")
+
+    data["Date"] = pd.to_datetime(
+        data["Date"], errors="raise"
+    ).dt.normalize()
+
+    saved_forecasts = data[data["Date"] == target_date]
+
+    if saved_forecasts["Product"].duplicated().any():
+        raise ValueError(
+            "Forecast history contains duplicate products for this date."
+        )
+
+    saved_forecasts = saved_forecasts.set_index("Product")[
+        "Predicted_Demand"
+    ]
+
+    result["Predicted_Demand"] = result["Product"].map(
+        saved_forecasts
+    ).fillna("-")
+
+    return result
