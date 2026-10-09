@@ -19,7 +19,7 @@ The final result is a demand prediction for every bakery product.
 
 from datetime import date, timedelta
 
-from backend.data import get_products, get_product_price
+from backend.data import get_products,get_product_price,save_forecasts
 from backend.holidays import get_holiday_info
 from backend.weather import get_tomorrow_weather
 from ml.predict import predict_product_demand
@@ -175,4 +175,6 @@ def forecast_all_products(target_date=None):
             "Holiday_Name": holiday_data["Holiday_Name"]
         })
 
+    save_forecasts(forecasts)
+    
     return forecasts
