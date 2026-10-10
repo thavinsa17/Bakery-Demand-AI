@@ -9,12 +9,11 @@ from utils.auth import (
 
 st.set_page_config(
     page_title="Sign In | Bakery Demand AI",
-    page_icon="🥐",
     layout="centered",
 )
 
 page_header(
-    "🥐 Bakery Demand AI",
+    "Bakery Demand AI",
     "Sign in to manage your bakery demand forecasting.",
 )
 
