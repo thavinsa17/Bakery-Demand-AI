@@ -417,6 +417,15 @@ def train_model():
         print("Candidate model is not better.")
         print("The current model has been kept.")
 
+    return {
+        "replaced_model": replace_model,
+        "candidate_metrics": candidate_metrics,
+        "current_metrics": current_metrics,
+        "training_records": len(df),
+        "training_start_date": str(df["Date"].min().date()),
+        "training_end_date": str(df["Date"].max().date()),
+    }
+
 
     print("")
     print("==============================")
@@ -432,3 +441,4 @@ def train_model():
 
 if __name__ == "__main__":
     train_model()
+
