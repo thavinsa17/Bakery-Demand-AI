@@ -3,7 +3,9 @@ pandas
 numpy
 scikit-learn
 xgboost
-plotly
+joblib
 requests
-jupyter
 holidays
+matplotlib
+seaborn
+jupyter
