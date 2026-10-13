@@ -16,6 +16,40 @@ st.set_page_config(
 
 require_login()
 
+# ============================================================
+# PAGE STYLING
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1200px;
+    }
+
+    h1, h2, h3 {
+        letter-spacing: -0.5px;
+    }
+
+    div.stButton > button {
+        border-radius: 8px;
+        min-height: 44px;
+        font-weight: 600;
+    }
+
+    div[data-testid="stMetric"] {
+        background-color: #FFFFFF;
+        border: 1px solid #E5D7C7;
+        padding: 18px;
+        border-radius: 12px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 page_header(
     "Demand Forecast",
     "Plan tomorrow's production using AI-powered demand predictions.",
@@ -28,21 +62,43 @@ st.divider()
 # GENERATE FORECAST
 # ============================================================
 
+if "forecast_results" not in st.session_state:
+    st.session_state["forecast_results"] = None
+
 if st.button("Refresh Forecast", type="primary"):
-    st.session_state["refresh_forecast"] = True
+    st.session_state["forecast_results"] = None
 
-try:
-    with st.spinner("Generating demand forecasts..."):
-        forecasts = forecast_all_products()
+    try:
+        with st.spinner("Generating demand forecasts..."):
+            st.session_state["forecast_results"] = forecast_all_products()
 
-except Exception as error:
-    st.error("Unable to generate the demand forecast.")
-    st.exception(error)
-    st.stop()
+    except Exception as error:
+        st.error("Unable to generate the demand forecast.")
+
+        with st.expander("View error details"):
+            st.exception(error)
+
+
+# Generate the initial forecast when the page is first opened.
+if st.session_state["forecast_results"] is None:
+    try:
+        with st.spinner("Generating demand forecasts..."):
+            st.session_state["forecast_results"] = forecast_all_products()
+
+    except Exception as error:
+        st.error("Unable to generate the demand forecast.")
+
+        with st.expander("View error details"):
+            st.exception(error)
+
+        st.stop()
+
+
+forecasts = st.session_state["forecast_results"]
 
 
 # ============================================================
-# CHECK FORECAST
+# CHECK FORECAST DATA
 # ============================================================
 
 if not forecasts:
@@ -63,7 +119,8 @@ required_columns = [
 ]
 
 missing_columns = [
-    column for column in required_columns
+    column
+    for column in required_columns
     if column not in forecast_df.columns
 ]
 
@@ -73,6 +130,29 @@ if missing_columns:
         + ", ".join(missing_columns)
     )
     st.stop()
+
+forecast_df["Date"] = pd.to_datetime(
+    forecast_df["Date"],
+    errors="coerce",
+)
+
+forecast_df["Predicted_Demand"] = pd.to_numeric(
+    forecast_df["Predicted_Demand"],
+    errors="coerce",
+)
+
+forecast_df = forecast_df.dropna(
+    subset=["Date", "Product", "Predicted_Demand"]
+)
+
+if forecast_df.empty:
+    st.warning("No valid forecast records are available.")
+    st.stop()
+
+# Demand cannot be negative.
+forecast_df["Predicted_Demand"] = (
+    forecast_df["Predicted_Demand"].clip(lower=0)
+)
 
 
 # ============================================================
@@ -91,13 +171,22 @@ st.markdown("### Forecast Overview")
 date_col, demand_col, products_col = st.columns(3)
 
 with date_col:
-    st.metric("Forecast Date", forecast_date)
+    st.metric(
+        "Forecast Date",
+        forecast_date,
+    )
 
 with demand_col:
-    st.metric("Total Predicted Units", f"{total_demand:,.0f}")
+    st.metric(
+        "Total Predicted Units",
+        f"{total_demand:,.0f}",
+    )
 
 with products_col:
-    st.metric("Products Forecast", product_count)
+    st.metric(
+        "Products Forecast",
+        product_count,
+    )
 
 st.caption(
     "Total predicted units are the sum of the model's predictions "
@@ -108,7 +197,7 @@ st.divider()
 
 
 # ============================================================
-# WEATHER AND HOLIDAY
+# WEATHER AND HOLIDAY INFORMATION
 # ============================================================
 
 st.markdown("### Conditions for the Forecast Date")
@@ -134,7 +223,7 @@ with rainfall_col:
     st.markdown("**Expected Rainfall**")
     st.markdown(f"### {rainfall:.1f} mm")
 
-if is_holiday:
+if pd.notna(is_holiday) and bool(is_holiday):
     st.info(f"Public holiday: {holiday_name}")
 else:
     st.success("No public holiday is expected for this date.")
@@ -143,30 +232,42 @@ st.divider()
 
 
 # ============================================================
-# PRODUCT DEMAND TABLE
+# PREPARE PRODUCT DEMAND DATA
 # ============================================================
 
-st.markdown("### Predicted Demand by Product")
+chart_df = (
+    forecast_df.groupby(
+        "Product",
+        as_index=False,
+    )["Predicted_Demand"]
+    .sum()
+    .sort_values(
+        "Predicted_Demand",
+        ascending=False,
+    )
+)
 
-display_df = forecast_df[
-    ["Product", "Predicted_Demand"]
-].copy()
-
-display_df = display_df.rename(
+chart_df = chart_df.rename(
     columns={
         "Product": "Bakery Product",
         "Predicted_Demand": "Predicted Units",
     }
 )
 
+display_df = chart_df.copy()
+
 display_df["Predicted Units"] = (
-    display_df["Predicted Units"].round().astype(int)
+    display_df["Predicted Units"]
+    .round()
+    .astype(int)
 )
 
-display_df = display_df.sort_values(
-    "Predicted Units",
-    ascending=False,
-)
+
+# ============================================================
+# PRODUCT DEMAND TABLE
+# ============================================================
+
+st.markdown("### Predicted Demand by Product")
 
 st.dataframe(
     display_df,
@@ -187,4 +288,25 @@ st.caption(
     "Products are ordered from highest to lowest predicted demand. "
     "Predictions are estimates, so use them alongside your bakery's "
     "experience and actual sales."
+)
+
+st.divider()
+
+
+# ============================================================
+# PREDICTED DEMAND BAR CHART
+# ============================================================
+
+st.markdown("### Demand Distribution by Product")
+
+st.bar_chart(
+    chart_df,
+    x="Bakery Product",
+    y="Predicted Units",
+    horizontal=True,
+)
+
+st.caption(
+    "Compare predicted demand across products to help plan production "
+    "quantities for the forecast date."
 )
