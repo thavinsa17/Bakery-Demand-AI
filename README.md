@@ -402,17 +402,16 @@ The project demonstration showcases the main features of Bakery Demand AI, inclu
 ### Project Resources
 
 - **Source Code:** [Bakery Demand AI — GitHub Repository](https://github.com/thavinsa17/Bakery-Demand-AI)
-- **Demonstration Video:** *Add demonstration video link.*
-- **Business Case Document:** *Add document link.*
-- **Presentation Slides:** *Add presentation link.*
-- **AI Usage Report:** *Add report link.*
+- **Demonstration Video:** [Click Here](https://drive.google.com/drive/folders/1_JFiC9DLVHNRZYvw2K1M6kAW_SVi6xqi?usp=sharing)
+- **Business Case Document:** [Click Here](https://drive.google.com/file/d/1x5c9279J3EFraifI3-AQjJ6GmJJ7_FBQ/view?usp=drive_link)
+- **Presentation Slides:** [Click Here](https://docs.google.com/presentation/d/1vdT2PesWbsald6AIFL_me3PMdHpA1gm9/edit?usp=drive_link&ouid=104632448664409240222&rtpof=true&sd=true)
+- **AI Usage Report:** [Click Here](https://drive.google.com/file/d/1kWlVsX5XYbT93dEYxUInk8zuNJReWmg_/view?usp=drive_link)
 
-Team 
+## Team
 
 Bakery Demand AI was developed by:
 
-[Team Member 1] — [Role or contribution]
-
-[Team Member 2] — [Role or contribution]
-
-[Team Member 3] — [Role or contribution]
+- **Thavinsa Karandawala** – Frontend Development
+- **Anuja Boyagoda** – Backend Development and Machine Learning
+- **Parindi Dharamawardhana** – Frontend Development
+- **Hasitha Herath** – Backend Development and Machine Learning
