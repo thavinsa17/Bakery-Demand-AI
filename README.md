@@ -233,13 +233,53 @@ Bakery-Demand-AI/
 
 ### Prerequisites
 
-Before running Bakery Demand AI, ensure that you have:
+Before setting up Bakery Demand AI, ensure you have:
 
-- Python installed.
-- Git installed to clone the repository.
-- An internet connection for retrieving weather data from the Open-Meteo API.
+- **Python 3.12 (64-bit)** installed.
+- **Git** installed to clone the repository.
+- An active internet connection for installing dependencies and retrieving weather data.
 
-### 1. Clone the Repository
+### 1. Install and Verify Python 3.12
+
+If Python 3.12 is not already installed:
+
+1. Visit the official [Python 3.12.9 download page](https://www.python.org/downloads/release/python-3129/).
+2. Download **Windows installer (64-bit)**.
+3. Run the installer and select **Add python.exe to PATH** if the option is available.
+4. Complete the installation.
+
+Open PowerShell and run the following commands to verify the installation.
+
+**Check the installed Python version:**
+
+```powershell
+py -3.12 --version
+```
+
+The output should display a Python 3.12.x version.
+
+**Check the location of the Python executable:**
+
+```powershell
+py -3.12 -c "import sys; print(sys.executable)"
+```
+
+This displays the full path to the Python 3.12 executable.
+
+**Check whether Python is available through PATH:**
+
+```powershell
+python --version
+where.exe python
+```
+
+The first command displays the Python version resolved through `PATH`, and the second lists matching executables found through `PATH`.
+
+If `python` points to a different version, use `py -3.12` for the commands in this guide to ensure the project uses Python 3.12.
+
+**Important:** Use the standard Windows Python distribution rather than a Python installation bundled with MSYS2 or MinGW. The project was tested successfully using standard Windows Python 3.12.
+
+### 2. Clone the Repository
 
 Open a terminal and run:
 
@@ -248,68 +288,87 @@ git clone https://github.com/thavinsa17/Bakery-Demand-AI.git
 cd Bakery-Demand-AI
 ```
 
-### 2. Create and Activate a Virtual Environment
+### 3. Create and Activate a Virtual Environment
 
-Create an isolated Python environment for the project:
-
-```bash
-python -m venv .venv
-```
-
-Activate it using the appropriate command for your operating system.
+A virtual environment isolates the project's dependencies from other Python projects.
 
 **Windows (PowerShell):**
 
 ```powershell
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-**macOS / Linux:**
+If PowerShell prevents activation because script execution is restricted, you can use Command Prompt instead:
+
+```bat
+.venv\Scripts\activate.bat
+```
+
+**macOS/Linux:**
 
 ```bash
+python3.12 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3. Install Dependencies
+Once activated, the environment name, usually `(.venv)`, should appear at the beginning of your terminal prompt.
 
-Install the required Python packages:
+### 4. Install Dependencies
+
+With the virtual environment activated, upgrade pip and install the required packages:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### 4. Initialize the Dataset
+Wait for the installation to complete before proceeding.
 
-If `data/bakery_data.csv` has not yet been created, initialize it from the original historical sales dataset:
+### 5. Initialize the Dataset (If Required)
+
+Check whether `data/bakery_data.csv` already exists.
+
+If the operational dataset is missing, initialize it by running:
 
 ```bash
 python setup/initialize_data.py
 ```
 
-Run this initialization step only once when creating the initial dataset. The script generates the enriched operational dataset using the original sales records, historical weather information, and calendar features. It does not modify the original historical CSV.
+The initialization script prepares the operational dataset using the historical sales source and enriches it with the required features. It may retrieve historical weather data from Open-Meteo, so an internet connection is required.
 
-Do not rerun initialization on an existing operational dataset unless you intentionally want to recreate it.
+**Important:** Run the initialization script only when the operational dataset has not yet been created, or when intentionally recreating it. Do not rerun it on an existing operational dataset unless you intend to replace the initialized data.
 
-### 5. Launch the Application
+### 6. Launch the Application
 
-Start the Streamlit application from the project root:
+From the project root, with the virtual environment activated, run:
 
 ```bash
 streamlit run app.py
 ```
 
-Streamlit will provide a local URL that you can open in your web browser to access Bakery Demand AI.
+Streamlit will display a local URL, typically:
 
-### 6. Sign In
+```text
+http://localhost:8501
+```
 
-Open the application and use the login page to create the first account, if no account has been registered, or sign in with the existing credentials. After signing in, use the sidebar to navigate between the available application pages.
+Open this URL in your browser to access Bakery Demand AI.
 
-### Notes
+### 7. Sign In
 
-- The application uses Open-Meteo to retrieve weather information, so weather-dependent features require an internet connection.
-- The original historical sales dataset must be available in the `data/` directory when initializing the operational dataset.
-- Keep the original historical CSV unchanged. Daily records are stored in `data/bakery_data.csv`.
-- Model retraining is available through the Model Management page and is separate from recording daily entries.
+- If no account has been registered, create the initial account through the application's sign-in page.
+- If an account already exists, sign in using the registered credentials.
+
+### Additional Notes
+
+- The application uses CSV files for operational data and account storage.
+- Daily entries update the operational dataset in `data/bakery_data.csv`.
+- Product price history and forecast history are stored separately.
+- Model retraining is performed manually through the Model Management page. Recording daily entries does not automatically retrain the model.
+- An internet connection is required for weather data retrieval and other external API requests.
+- Keep the virtual environment activated when running the application or executing project commands.
+
 
 ## Feature Implementation Status
 
