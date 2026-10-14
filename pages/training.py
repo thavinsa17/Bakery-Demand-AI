@@ -1,11 +1,26 @@
+
 import streamlit as st
+import pandas as pd
 
 from utils.ui import page_header, require_login
 from ml.train import train_model
 
-st.set_page_config(page_title="Model Management", layout="wide")
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+
+st.set_page_config(
+    page_title="Model Management | BakeWise",
+    layout="wide",
+)
 
 require_login()
+
+
+# ============================================================
+# STYLING
+# ============================================================
 
 st.markdown(
     """
@@ -46,14 +61,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# ============================================================
+# PAGE HEADER
+# ============================================================
+
 page_header(
     "Model Management",
-    "Monitor forecasting performance and retrain the demand prediction model when needed.",
+    "Monitor forecasting performance and retrain the demand "
+    "prediction model when needed.",
 )
 
 st.divider()
 
-# Current model overview
+
+# ============================================================
+# CURRENT MODEL OVERVIEW
+# ============================================================
+
 st.subheader("Current Model")
 
 col1, col2 = st.columns(2)
@@ -81,13 +106,18 @@ with col2:
     )
 
 st.info(
-    "Retraining evaluates a candidate model against the current model. "
-    "The existing model is retained if the candidate does not perform better."
+    "Retraining evaluates a candidate model against the current "
+    "model using the same test data. The existing model is retained "
+    "if the candidate does not perform better."
 )
 
 st.divider()
 
-# Dataset information
+
+# ============================================================
+# TRAINING DATA INFORMATION
+# ============================================================
+
 st.subheader("Training Data")
 
 try:
@@ -97,105 +127,239 @@ try:
 
     if df.empty:
         st.warning("No training data is available.")
+
+    elif "Date" not in df.columns:
+        st.error("The training dataset does not contain a Date column.")
+
     else:
-        df["Date"] = __import__("pandas").to_datetime(df["Date"])
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        valid_dates = df["Date"].dropna()
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric("Training Records", f"{len(df):,}")
+            st.metric(
+                "Training Records",
+                f"{len(df):,}",
+            )
 
         with col2:
-            st.metric("First Record", df["Date"].min().strftime("%d %b %Y"))
+            if not valid_dates.empty:
+                st.metric(
+                    "First Record",
+                    valid_dates.min().strftime("%d %b %Y"),
+                )
+            else:
+                st.metric("First Record", "Unavailable")
 
         with col3:
-            st.metric("Latest Record", df["Date"].max().strftime("%d %b %Y"))
+            if not valid_dates.empty:
+                st.metric(
+                    "Latest Record",
+                    valid_dates.max().strftime("%d %b %Y"),
+                )
+            else:
+                st.metric("Latest Record", "Unavailable")
 
 except Exception as error:
     st.error("Unable to load training data.")
-    st.exception(error)
+    with st.expander("View error details"):
+        st.exception(error)
+
 
 st.divider()
 
-# Retraining
+
+# ============================================================
+# RETRAIN DEMAND MODEL
+# ============================================================
+
 st.subheader("Retrain Demand Model")
+
 st.write(
-    "Retraining can improve forecasts as more sales records become available. "
-    "This process may take some time."
+    "Retraining uses the latest available bakery data to train "
+    "and evaluate a candidate forecasting model. The candidate "
+    "replaces the existing model only if it performs better."
 )
 
-if st.button("Start Model Training", type="primary", use_container_width=True):
-    with st.spinner("Training and evaluating the candidate model... Please wait."):
+if st.button(
+    "Start Model Training",
+    type="primary",
+    use_container_width=True,
+):
+
+    with st.spinner(
+        "Training and evaluating the candidate model... Please wait."
+    ):
         try:
             result = train_model()
+
+            # ------------------------------------------------
+            # EXTRACT RESULTS
+            # ------------------------------------------------
+
+            candidate = result.get("candidate_metrics") or {}
+            current = result.get("current_metrics") or {}
 
             st.divider()
             st.subheader("Training Results")
 
-            candidate = result.get("candidate_metrics", {})
-            current = result.get("current_metrics", {})
+            # ------------------------------------------------
+            # CANDIDATE MODEL METRICS
+            # Metric keys from ml.train are lowercase:
+            # mae, rmse, wape.
+            # ------------------------------------------------
 
             col1, col2 = st.columns(2)
 
             with col1:
-                st.markdown("**Candidate Model**")
+                st.markdown("### Candidate Model")
+
                 if candidate:
-                    st.metric(
-                        "MAE",
-                        f"{candidate.get('MAE', 0):.2f}",
-                    )
-                    st.metric(
-                        "RMSE",
-                        f"{candidate.get('RMSE', 0):.2f}",
-                    )
-                    if "WAPE" in candidate:
+                    if candidate.get("mae") is not None:
+                        st.metric(
+                            "MAE",
+                            f"{candidate['mae']:.2f} units",
+                            help=(
+                                "Mean Absolute Error: the average "
+                                "absolute difference between actual "
+                                "and predicted demand."
+                            ),
+                        )
+                    else:
+                        st.metric("MAE", "Unavailable")
+
+                    if candidate.get("rmse") is not None:
+                        st.metric(
+                            "RMSE",
+                            f"{candidate['rmse']:.2f} units",
+                            help=(
+                                "Root Mean Squared Error: a metric "
+                                "that penalizes larger prediction "
+                                "errors more heavily."
+                            ),
+                        )
+                    else:
+                        st.metric("RMSE", "Unavailable")
+
+                    if candidate.get("wape") is not None:
                         st.metric(
                             "WAPE",
-                            f"{candidate['WAPE']:.2f}%",
+                            f"{candidate['wape'] * 100:.2f}%",
+                            help=(
+                                "Weighted Absolute Percentage Error: "
+                                "total absolute prediction error "
+                                "divided by total actual demand."
+                            ),
                         )
+                    else:
+                        st.metric("WAPE", "Unavailable")
+
                 else:
-                    st.write("Candidate metrics are unavailable.")
+                    st.warning(
+                        "Candidate model metrics are unavailable."
+                    )
+
+            # ------------------------------------------------
+            # CURRENT MODEL METRICS
+            # ------------------------------------------------
 
             with col2:
-                st.markdown("**Current Model**")
+                st.markdown("### Current Model")
+
                 if current:
-                    st.metric(
-                        "MAE",
-                        f"{current.get('MAE', 0):.2f}",
-                    )
-                    st.metric(
-                        "RMSE",
-                        f"{current.get('RMSE', 0):.2f}",
-                    )
-                    if "WAPE" in current:
+                    if current.get("mae") is not None:
+                        st.metric(
+                            "MAE",
+                            f"{current['mae']:.2f} units",
+                        )
+                    else:
+                        st.metric("MAE", "Unavailable")
+
+                    if current.get("rmse") is not None:
+                        st.metric(
+                            "RMSE",
+                            f"{current['rmse']:.2f} units",
+                        )
+                    else:
+                        st.metric("RMSE", "Unavailable")
+
+                    if current.get("wape") is not None:
                         st.metric(
                             "WAPE",
-                            f"{current['WAPE']:.2f}%",
+                            f"{current['wape'] * 100:.2f}%",
                         )
+                    else:
+                        st.metric("WAPE", "Unavailable")
+
                 else:
-                    st.write("Current metrics are unavailable.")
+                    st.info(
+                        "No current model metrics were returned. "
+                        "This can happen when no previous model "
+                        "was available for comparison."
+                    )
 
-            st.write(
-                f"**Training records:** "
-                f"{result.get('training_records', 'Unavailable')}"
-            )
+            # ------------------------------------------------
+            # TRAINING DATA SUMMARY
+            # ------------------------------------------------
 
-            start_date = result.get("training_start_date")
-            end_date = result.get("training_end_date")
+            st.divider()
+            st.subheader("Training Summary")
 
-            if start_date is not None and end_date is not None:
-                st.write(f"**Training period:** {start_date} to {end_date}")
+            summary_col1, summary_col2 = st.columns(2)
+
+            with summary_col1:
+                st.write("**Training records**")
+
+                records = result.get("training_records")
+
+                if records is not None:
+                    st.write(f"{records:,}")
+                else:
+                    st.write("Unavailable")
+
+            with summary_col2:
+                st.write("**Training period**")
+
+                start_date = result.get("training_start_date")
+                end_date = result.get("training_end_date")
+
+                if start_date is not None and end_date is not None:
+                    st.write(f"{start_date} to {end_date}")
+                else:
+                    st.write("Unavailable")
+
+            # ------------------------------------------------
+            # MODEL SELECTION RESULT
+            # ------------------------------------------------
+
+            st.divider()
 
             if result.get("replaced_model", False):
                 st.success(
-                    "The candidate model performed better and has replaced the previous model."
+                    "The candidate model performed better and "
+                    "has replaced the previous model."
                 )
+
+            elif current:
+                st.info(
+                    "The current model has been retained because "
+                    "the candidate did not outperform it."
+                )
+
             else:
                 st.info(
-                    "The current model has been retained because the candidate "
-                    "did not outperform it."
+                    "The training process completed, but no current "
+                    "model metrics were available for comparison. "
+                    "Check the training logs to confirm which model "
+                    "is now being used."
                 )
 
         except Exception as error:
-            st.error("Model training failed. The current model should remain unchanged.")
-            st.exception(error)
+            st.error(
+                "Model training failed. The current model should "
+                "remain unchanged."
+            )
+
+            with st.expander("View error details"):
+                st.exception(error)

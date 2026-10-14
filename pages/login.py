@@ -1,6 +1,7 @@
-import streamlit as st
 
-from utils.ui import page_header
+import streamlit as st
+from pathlib import Path
+
 from utils.auth import (
     account_exists,
     authenticate_user,
@@ -8,14 +9,42 @@ from utils.auth import (
 )
 
 st.set_page_config(
-    page_title="Sign In | Bakery Demand AI",
+    page_title="Sign In | BakeWise",
+    page_icon="🥐",
     layout="centered",
 )
 
-page_header(
-    "Bakery Demand AI",
-    "Sign in to manage your bakery demand forecasting.",
+# ---------------------------------------------------------
+# BAKEWISE BRANDING
+# ---------------------------------------------------------
+
+logo_path = Path(__file__).resolve().parent.parent / "bakewise_logo.png"
+
+if logo_path.exists():
+    _, logo_col, _ = st.columns([1, 2, 1])
+
+    with logo_col:
+        st.image(
+            str(logo_path),
+            use_container_width=True,
+        )
+else:
+    st.title("BakeWise")
+
+st.markdown(
+    """
+    <div style="text-align:center; margin-bottom:1.5rem;">
+        <p style="color:#71594B; font-size:1rem;">
+            Sign in to your BakeWise bakery workspace.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
+
+# ---------------------------------------------------------
+# ACCOUNT STATUS
+# ---------------------------------------------------------
 
 try:
     registered = account_exists()
@@ -23,11 +52,17 @@ except Exception as error:
     st.error(f"Could not check registered accounts: {error}")
     st.stop()
 
+# ---------------------------------------------------------
+# ALREADY LOGGED IN
+# ---------------------------------------------------------
+
 if st.session_state.get("logged_in", False):
+
     st.success(
         f"You're signed in as "
         f"{st.session_state.get('user_name', 'the bakery user')}."
     )
+
     st.info("Use the sidebar to open your bakery dashboard.")
 
     if st.button("Log Out", type="secondary"):
@@ -36,8 +71,18 @@ if st.session_state.get("logged_in", False):
         st.session_state.pop("user_name", None)
         st.rerun()
 
+# ---------------------------------------------------------
+# NOT LOGGED IN
+# ---------------------------------------------------------
+
 else:
+
+    # -----------------------------------------------------
+    # FIRST ACCOUNT REGISTRATION
+    # -----------------------------------------------------
+
     if not registered:
+
         st.info(
             "Welcome! Create the first account for this bakery. "
             "After registration, new account creation will be disabled."
@@ -48,13 +93,17 @@ else:
         )
 
         with tab_signup:
+
             with st.form("first_account_form"):
+
                 full_name = st.text_input("Full Name")
                 email = st.text_input("Email Address")
+
                 password = st.text_input(
                     "Password",
                     type="password",
                 )
+
                 confirm_password = st.text_input(
                     "Confirm Password",
                     type="password",
@@ -67,31 +116,50 @@ else:
                 )
 
             if create_account:
+
                 if not full_name.strip() or not email.strip():
                     st.error("Please enter your name and email.")
+
                 elif not password or not confirm_password:
                     st.error("Please enter and confirm your password.")
+
                 elif password != confirm_password:
                     st.error("The passwords do not match.")
+
                 else:
                     try:
-                        register_user(full_name, email, password)
+                        register_user(
+                            full_name,
+                            email,
+                            password,
+                        )
+
                         st.success(
                             "Your account has been created. "
                             "Please sign in using your new credentials."
                         )
+
                         st.rerun()
+
                     except ValueError as error:
                         st.error(str(error))
+
                     except Exception as error:
                         st.error(f"Could not create account: {error}")
 
+        # -------------------------------------------------
+        # SIGN IN DURING FIRST ACCOUNT SETUP
+        # -------------------------------------------------
+
         with tab_signin:
+
             with st.form("signin_form"):
+
                 email = st.text_input(
                     "Email Address",
                     key="initial_signin_email",
                 )
+
                 password = st.text_input(
                     "Password",
                     type="password",
@@ -105,6 +173,7 @@ else:
                 )
 
             if signin:
+
                 user = authenticate_user(email, password)
 
                 if user:
@@ -112,14 +181,22 @@ else:
                     st.session_state["user_email"] = user["email"]
                     st.session_state["user_name"] = user["full_name"]
                     st.rerun()
+
                 else:
                     st.error("Invalid email or password.")
 
+    # -----------------------------------------------------
+    # EXISTING ACCOUNT SIGN IN
+    # -----------------------------------------------------
+
     else:
+
         st.success("Your bakery account is already registered.")
 
         with st.form("signin_existing_form"):
+
             email = st.text_input("Email Address")
+
             password = st.text_input(
                 "Password",
                 type="password",
@@ -132,6 +209,7 @@ else:
             )
 
         if signin:
+
             user = authenticate_user(email, password)
 
             if user:
@@ -139,5 +217,6 @@ else:
                 st.session_state["user_email"] = user["email"]
                 st.session_state["user_name"] = user["full_name"]
                 st.rerun()
+
             else:
                 st.error("Invalid email or password.")
